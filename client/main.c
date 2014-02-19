@@ -8,8 +8,6 @@
 #include <pthread.h>
 #include <ncurses.h>
 
-/* GUI */
-
 /* Text input box width */
 #define INPUT_WINDOW_H 8
 
@@ -21,13 +19,14 @@ WINDOW *outscr;
 int row;
 int cell;
 
-/* GUI END */
-
 /* Maximum length of received and sent messages in bytes */
 #define MAX_LEN 1024
 
 /* Server socket file descriptor */
 int sock;
+
+/* Server information */
+struct sockaddr_in server;
 
 /* The message buffer stores the last message received from stdin or the server
  * nr tells the threads what number the message is(is it a new one) */
@@ -39,6 +38,16 @@ struct message_buffer {
 struct message_buffer msg_from_in;
 struct message_buffer msg_from_serv;
 
+/* Server ip addres and port */
+char ip[INET_ADDRSTRLEN];
+uint16_t port;
+
+/* Thread flag, when to disconnect */
+int work;
+
+/* Menu message */
+char menu_msg[MAX_LEN];
+
 /* Prints out the messages received from the server */
 void print_out();
 /* Get all the input from stdio and puts it in a global buffer */
@@ -49,73 +58,136 @@ void recvsend();
 void cleanup();
 /* Simple print error and die function */
 void die(char *msg);
+/* Get the ip and port of the server */
+void menu(char *msg);
+/* The chat */
+void chat();
 
 int main(int argc, char** argv)
 {
-    struct sockaddr_in server;
-
-    if (argc != 3) {
-        die("USAGE: happychat <ip> <port>\n");
-    }
-
-    if ((sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
-        die("Failed to create socket\n");
-    }
-
     /* Init ncurses */
     initscr();
 
     /* Get window size */
     getmaxyx(stdscr, row, cell);
 
-    /* Init the windows */
-    inscr = newwin(INPUT_WINDOW_H, cell, row-INPUT_WINDOW_H, 0);
-    outscr = newwin(row-INPUT_WINDOW_H, cell, 0, 0);
-
     /* Make scrolling available */
     scrollok(outscr, TRUE);
 
-    /* Construct server struct */
-    memset(&server, 0, sizeof(server));
-    server.sin_family = AF_INET;
-    server.sin_addr.s_addr = inet_addr(argv[1]);
-    server.sin_port = htons(atoi(argv[2]));
-
-    /* Connect to the server */
-    if (connect(sock,
-                (struct sockaddr *) &server,
-                sizeof(server)) < 0) {
-            die("Failed to connect to server\n");
-    }
-
-    wprintw(outscr, "Connected\n");
-    wrefresh(outscr);
-
-    msg_from_in.nr = 0;
-    msg_from_serv.nr = 0;
-
-    pthread_t thr[3];
-    pthread_create(&thr[1], NULL, scan_in, NULL);
-    pthread_create(&thr[2], NULL, print_out, NULL);
-    pthread_create(&thr[3], NULL, recvsend, NULL);
-
-    pthread_join(thr[1], NULL);
-    pthread_join(thr[2], NULL);
-    pthread_join(thr[3], NULL);
+    chat();
 
     /* Clean up */
-    close(sock);
-    delwin(inscr);
-    delwin(outscr);
     endwin();
     return 0;
 }
 
+void chat()
+{
+    int quit = 1;
+    sprintf(menu_msg, "Enter ip and port to connect");
+    while(quit) {
+        menu(menu_msg);
+
+        if (strcmp(ip, "0") == 0 && port == 0)
+            break;
+
+        if ((sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
+            perror("Failed to create socket\n");
+            sprintf(menu_msg, "Failed to create socket");
+            continue;
+        }
+
+        /* Construct server struct */
+        memset(&server, 0, sizeof(server));
+        server.sin_family = AF_INET;
+        server.sin_addr.s_addr = inet_addr(ip);
+        server.sin_port = htons(port);
+
+        /* Connect to the server */
+        if (connect(sock,
+                    (struct sockaddr *) &server,
+                    sizeof(server)) < 0) {
+                perror("Failed to connect to server\n");
+                sprintf(menu_msg, "Failed to connect to server");
+                continue;
+        }
+
+        /* Initialize the cat window */
+        inscr = newwin(INPUT_WINDOW_H, cell, row-INPUT_WINDOW_H, 0);
+        outscr = newwin(row-INPUT_WINDOW_H, cell, 0, 0);
+
+        wprintw(outscr, "Connected\n");
+        wrefresh(outscr);
+
+        msg_from_in.nr = 0;
+        msg_from_serv.nr = 0;
+        work = 1;
+
+        /* Start the chat */
+        pthread_t thr[3];
+        pthread_create(&thr[1], NULL, scan_in, NULL);
+        pthread_create(&thr[2], NULL, print_out, NULL);
+        pthread_create(&thr[3], NULL, recvsend, NULL);
+
+        pthread_join(thr[1], NULL);
+        pthread_join(thr[2], NULL);
+        pthread_join(thr[3], NULL);
+
+        /* Clear and delete the chat windows */
+        close(sock);
+        werase(inscr);
+        werase(outscr);
+        wrefresh(inscr);
+        wrefresh(outscr);
+        delwin(inscr);
+        delwin(outscr);
+    }
+}
+
+void menu(char *msg)
+{
+    WINDOW *loginscr;
+
+    loginscr = newwin(7, 30, row/2 -4, cell/2-15);
+    box(loginscr, 0, 0);
+    /* Write happy chat and some glitter on top of input window */
+    attron(A_BOLD);
+    mvprintw(row/2 - 6, cell/2 - 5, "HAPPYCHAT");
+    attroff(A_BOLD);
+    mvprintw(row/2 - 5, cell/2 - 16, "(Enter 0 for ip and port to exit)");
+    mvprintw(row/2 + 6, cell/2 - strlen(msg)/2, "%s", msg);
+    refresh();
+
+    /* Ip and port input window */
+    wattron(loginscr, A_BOLD | A_STANDOUT);
+    mvwprintw(loginscr, 2, 1, "ip:                         ");
+    mvwprintw(loginscr, 4, 1, "port:                       ");
+    wattroff(loginscr, A_BOLD | A_STANDOUT);
+    wrefresh(loginscr);
+
+    /* Get the input */
+    mvwgetstr(loginscr, 2, 7, ip);
+    mvwscanw(loginscr, 4, 7, "%d", &port);
+
+    /* Clear and delete the window */
+    erase();
+    werase(loginscr);
+    refresh();
+    wrefresh(loginscr);
+    delwin(loginscr);
+}
+
 void scan_in()
 {
-        mvwhline(inscr, 0, 0, 0, cell);
-    while(1) {
+    mvwhline(inscr, 0, 0, 0, cell);
+
+    while(work) {
         mvwgetstr(inscr, 1, 0, msg_from_in.message);
+        if (strcmp(msg_from_in.message, "!EXIT") == 0) {
+            sprintf(menu_msg, "Enter ip and port to connect");
+            work = 0;
+            break;
+        }
         msg_from_in.nr++;
         werase(inscr);
         mvwhline(inscr, 0, 0, 0, cell);
@@ -128,7 +200,7 @@ void print_out()
 {
     struct message_buffer oldmsg;
     oldmsg.nr = 0;
-    while(1) {
+    while(work) {
         if (oldmsg.nr != msg_from_serv.nr) {
             wprintw(outscr, "%s\n", msg_from_serv.message);
             oldmsg.nr = msg_from_serv.nr;
@@ -162,7 +234,7 @@ void recvsend()
     tv.tv_sec = 2;
     tv.tv_usec = 0;
 
-    while(1) {
+    while(work) {
         reads = buffr;
         sends = buffs;
 
@@ -172,12 +244,18 @@ void recvsend()
         if (FD_ISSET(sock, &reads)) {
             memset(&(msg_from_serv.message), 0, MAX_LEN);
             len = recv(sock, msg_from_serv.message, MAX_LEN, 0);
-            if (len == -1)
+            if (len == -1) {
                 perror("Failed while receiving message from server\n");
-            else if (len == 0)
-                die("Server closed connection\n");
-            else
+            }
+            else if (len == 0) {
+                perror("Server closed connection\n");
+                sprintf(menu_msg, "Server closed connection");
+                work = 0;
+                break;
+            }
+            else {
                 msg_from_serv.nr++;
+            }
         }
 
         if (FD_ISSET(sock, &sends) && (oldmsg.nr != msg_from_in.nr)) {
