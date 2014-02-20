@@ -48,6 +48,9 @@ int work;
 /* Menu message */
 char menu_msg[MAX_LEN];
 
+/* Error log file */
+FILE *errlogf;
+
 /* Prints out the messages received from the server */
 void print_out();
 /* Get all the input from stdio and puts it in a global buffer */
@@ -74,6 +77,9 @@ int main(int argc, char** argv)
     /* Make scrolling available */
     scrollok(outscr, TRUE);
 
+    /* Open the error log file */
+    errlogf = fopen("./err.log", "w");
+
     chat();
 
     /* Clean up */
@@ -88,11 +94,12 @@ void chat()
     while(quit) {
         menu(menu_msg);
 
+        /* Ip and port == 0 signal exit */
         if (strcmp(ip, "0") == 0 && port == 0)
             break;
 
         if ((sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
-            perror("Failed to create socket\n");
+            fprintf(errlogf, "Failed to create socket\n");
             sprintf(menu_msg, "Failed to create socket");
             continue;
         }
@@ -107,7 +114,7 @@ void chat()
         if (connect(sock,
                     (struct sockaddr *) &server,
                     sizeof(server)) < 0) {
-                perror("Failed to connect to server\n");
+                fprintf(errlogf, "Failed to connect to server\n");
                 sprintf(menu_msg, "Failed to connect to server");
                 continue;
         }
@@ -239,16 +246,16 @@ void recvsend()
         sends = buffs;
 
         if (select(maxfd+1, &reads, &sends, NULL, &tv) == -1)
-            perror("Error while selection file descriptor");
+            fprintf(errlogf, "Error while selection file descriptor");
 
         if (FD_ISSET(sock, &reads)) {
             memset(&(msg_from_serv.message), 0, MAX_LEN);
             len = recv(sock, msg_from_serv.message, MAX_LEN, 0);
             if (len == -1) {
-                perror("Failed while receiving message from server\n");
+                fprintf(errlogf, "Failed while receiving message from server\n");
             }
             else if (len == 0) {
-                perror("Server closed connection\n");
+                fprintf(errlogf, "Server closed connection\n");
                 sprintf(menu_msg, "Server closed connection");
                 work = 0;
                 break;
@@ -263,7 +270,7 @@ void recvsend()
             do {
                 n = send(sock, msg_from_in.message+total, MAX_LEN-total, 0);
                 if (n == -1) {
-                    perror("Failed to send chat message to client\n");
+                    fprintf(errlogf, "Failed to send chat message to client\n");
                     break;
                 }
                 total += n;
@@ -276,6 +283,8 @@ void recvsend()
 
 void cleanup()
 {
+    if (errlogf != NULL)
+        fclose(errlogf);
     close(sock);
     delwin(inscr);
     delwin(outscr);
