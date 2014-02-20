@@ -134,7 +134,7 @@ void pusage()
 
 /* Catch termination signals, clean up memory and exit */
 void *clex(int sig) {
-    printf("Caugth termination signal '%d'\n", sig);
+    printf("Caught termination signal '%d'\n", sig);
     close(server_sock);
     exit(1);
 }
