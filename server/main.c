@@ -338,11 +338,11 @@ void handle_message(int socket)
                 sprintf(notf, "%s has disconnected", clients->client->name);
                 break;
             }
+        }
 
         delete_from_cli_list(socket);
         send_to_all(notf);
 
-        }
         return;
     }
 
