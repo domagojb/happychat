@@ -74,9 +74,6 @@ int main(int argc, char** argv)
     /* Get window size */
     getmaxyx(stdscr, row, cell);
 
-    /* Make scrolling available */
-    scrollok(outscr, TRUE);
-
     /* Open the error log file */
     errlogf = fopen("./err.log", "w");
 
@@ -122,6 +119,9 @@ void chat()
         /* Initialize the cat window */
         inscr = newwin(INPUT_WINDOW_H, cell, row-INPUT_WINDOW_H, 0);
         outscr = newwin(row-INPUT_WINDOW_H, cell, 0, 0);
+
+        /* Make the window scroll */
+        scrollok(outscr, TRUE);
 
         wprintw(outscr, "Connected\n");
         wrefresh(outscr);
