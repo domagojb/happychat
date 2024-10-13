@@ -10,7 +10,6 @@
 #include <unistd.h>
 #include <netinet/in.h>
 #include <signal.h>
-#include <malloc.h>
 #include <errno.h>
 
 /* The default port for the server to listen on */
@@ -67,7 +66,7 @@ void die(char *msg);
 /* Print usage */
 void pusage();
 /* Catch termination signals, clean up memory and exit */
-void *clex(int sig);
+void clex(int sig);
 /* The chat service */
 void chat();
 /* Sends a message to all the clients */
@@ -133,7 +132,7 @@ void pusage()
 }
 
 /* Catch termination signals, clean up memory and exit */
-void *clex(int sig) {
+void clex(int sig) {
     printf("Caught termination signal '%d'\n", sig);
     close(server_sock);
     exit(1);
