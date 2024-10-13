@@ -52,11 +52,11 @@ char menu_msg[MAX_LEN];
 FILE *errlogf;
 
 /* Prints out the messages received from the server */
-void print_out();
+void *print_out();
 /* Get all the input from stdio and puts it in a global buffer */
-void scan_in();
+void *scan_in();
 /* Receives and sends messages from and to the server */
-void recvsend();
+void *recvsend();
 /* Clean the memmory */
 void cleanup();
 /* Simple print error and die function */
@@ -184,7 +184,7 @@ void menu(char *msg)
     delwin(loginscr);
 }
 
-void scan_in()
+void *scan_in()
 {
     mvwhline(inscr, 0, 0, 0, cell);
 
@@ -203,7 +203,7 @@ void scan_in()
     }
 }
 
-void print_out()
+void *print_out()
 {
     struct message_buffer oldmsg;
     oldmsg.nr = 0;
@@ -217,7 +217,7 @@ void print_out()
     }
 }
 
-void recvsend()
+void *recvsend()
 {
     fd_set reads, buffr;
     fd_set sends, buffs;
